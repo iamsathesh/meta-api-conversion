@@ -14,13 +14,12 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       try {
         const data = JSON.parse(body);
-        const phone = data.Mobile;
-        const email = data.Email;
-        const value = data.Amount;
-        const content_id = data.Course_ID || data.Workshop_ID;
-        const content_name = data.Course_Name || data.Workshop_Name;
+        const phone = data.Mobile || '';
+        const email = data.Email || '';
+        const value = data.Amount || 0;
+        const content_id = data.content_ids ? data.content_ids[0] : '';
 
-        if (!phone || !email || !value || !content_id || !content_name) {
+        if (!phone || !email || !content_id) {
           res.writeHead(400, { 'Content-Type': 'text/plain' });
           res.end('Missing required fields');
           return;
@@ -38,9 +37,7 @@ const server = http.createServer((req, res) => {
               custom_data: {
                 value: value,
                 currency: "INR",
-                content_ids: [content_id],
-                content_name: content_name,
-                content_type: "product"
+                content_ids: [content_id]
               }
             }
           ],
