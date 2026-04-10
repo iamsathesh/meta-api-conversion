@@ -41,7 +41,7 @@ const server = http.createServer((req, res) => {
               }
             }
           ],
-          test_event_code: "TEST3826"
+          test_event_code: "TEST84345"
         };
 
         fetch('https://graph.facebook.com/v18.0/3925754201017337/events?access_token=EAARmbpBh4TQBROjJG1ADdj969npDGawMxJIax3wAiEYpwvBPbG5ZCziBZCqb2xNOJllaIgVttgNwwG890GHxoAtXJil2tbTyf441nkv1DrMCRayB8bifVvos2ppMM5uZANeUSxMLF2tsRGaiOBdXTSBF0cZAROGhSFyPiRpU4WUlp6kTNLWh28crdGrx9YZCdwwZDZD', {
