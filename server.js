@@ -208,7 +208,7 @@ const server = http.createServer((req, res) => {
           event_id: eventId || null,
           content_id: content_id || null,
           error: err.message
-        });}
+        });
         
         // Distinguish between invalid JSON and other errors
         if (err instanceof SyntaxError) {
