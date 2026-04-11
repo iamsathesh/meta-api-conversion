@@ -142,6 +142,15 @@ const server = http.createServer((req, res) => {
           console.warn("Missing external_id - deduplication weakened");
         }
 
+        const eventId = data.external_id || `evt_${Date.now()}_${Math.random()}`;
+
+        if (matchScore < 2) {
+          console.warn("Low match quality", {
+            event_id: eventId,
+            matchScore
+          });
+        }
+
         const event = {
           data: [
             {
@@ -149,8 +158,7 @@ const server = http.createServer((req, res) => {
               event_time: Math.floor(Date.now() / 1000),
               action_source: "system_generated",
 
-              event_id: data.external_id || `evt_${Date.now()}_${Math.random()}`,
-
+              event_id: eventId,
 
               user_data: {
                 em: hash(email),
@@ -187,7 +195,7 @@ const server = http.createServer((req, res) => {
 
         console.log({
           status: "success",
-          event_id: data.external_id,
+          event_id: eventId,
           matchScore,
           meta_response: result
         });
@@ -197,10 +205,10 @@ const server = http.createServer((req, res) => {
 
       } catch (err) {
         console.error('Meta API failed', {
-          event_id: data?.external_id,
-          content_id: content_id,
+          event_id: eventId || null,
+          content_id: content_id || null,
           error: err.message
-        });
+        });}
         
         // Distinguish between invalid JSON and other errors
         if (err instanceof SyntaxError) {
