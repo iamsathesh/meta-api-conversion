@@ -1,4 +1,9 @@
-require('dotenv').config();
+// Load .env file if it exists (optional in production)
+try {
+  require('dotenv').config();
+} catch (err) {
+  // dotenv not installed, use existing environment variables
+}
 
 const http = require('http');
 const crypto = require('crypto');
