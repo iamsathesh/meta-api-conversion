@@ -51,6 +51,51 @@ function formatDOB(dob) {
   return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
 }
 
+// ISO 3166-1 alpha-2 country name → code map
+const COUNTRY_MAP = {
+  'afghanistan': 'af', 'albania': 'al', 'algeria': 'dz', 'argentina': 'ar',
+  'australia': 'au', 'austria': 'at', 'bangladesh': 'bd', 'belgium': 'be',
+  'brazil': 'br', 'canada': 'ca', 'chile': 'cl', 'china': 'cn',
+  'colombia': 'co', 'denmark': 'dk', 'egypt': 'eg', 'ethiopia': 'et',
+  'finland': 'fi', 'france': 'fr', 'germany': 'de', 'ghana': 'gh',
+  'greece': 'gr', 'hong kong': 'hk', 'hungary': 'hu', 'india': 'in',
+  'indonesia': 'id', 'iran': 'ir', 'iraq': 'iq', 'ireland': 'ie',
+  'israel': 'il', 'italy': 'it', 'japan': 'jp', 'jordan': 'jo',
+  'kenya': 'ke', 'kuwait': 'kw', 'malaysia': 'my', 'mexico': 'mx',
+  'morocco': 'ma', 'myanmar': 'mm', 'nepal': 'np', 'netherlands': 'nl',
+  'new zealand': 'nz', 'nigeria': 'ng', 'norway': 'no', 'oman': 'om',
+  'pakistan': 'pk', 'peru': 'pe', 'philippines': 'ph', 'poland': 'pl',
+  'portugal': 'pt', 'qatar': 'qa', 'romania': 'ro', 'russia': 'ru',
+  'saudi arabia': 'sa', 'singapore': 'sg', 'south africa': 'za',
+  'south korea': 'kr', 'spain': 'es', 'sri lanka': 'lk', 'sweden': 'se',
+  'switzerland': 'ch', 'taiwan': 'tw', 'tanzania': 'tz', 'thailand': 'th',
+  'turkey': 'tr', 'ukraine': 'ua', 'united arab emirates': 'ae',
+  'united kingdom': 'gb', 'united states': 'us', 'united states of america': 'us',
+  'usa': 'us', 'uk': 'gb', 'uae': 'ae', 'vietnam': 'vn', 'zimbabwe': 'zw'
+};
+
+function normalizeCountry(country) {
+  if (!country) return '';
+  const trimmed = country.trim().toLowerCase();
+  // Already a valid ISO 2-letter code
+  if (/^[a-z]{2}$/.test(trimmed)) return trimmed;
+  // Look up full country name in map
+  if (COUNTRY_MAP[trimmed]) return COUNTRY_MAP[trimmed];
+  // Fallback → return empty (safer than sending a wrong code)
+  return '';
+}
+
+// Normalize phone to E.164 digits-only format
+function normalizePhone(phone) {
+  if (!phone) return '';
+  let digits = phone.replace(/\D/g, '');
+  // Prepend India country code for bare 10-digit numbers
+  if (digits.length === 10) {
+    digits = '91' + digits;
+  }
+  return digits;
+}
+
 async function sendToMeta(payload, retries = 2) {
   try {
     const res = await fetch(META_URL, {
@@ -92,27 +137,32 @@ const server = http.createServer((req, res) => {
 
     req.on('data', chunk => {
       payloadSize += chunk.length;
-      
+
       if (payloadSize > MAX_PAYLOAD_SIZE) {
         req.pause();
         res.writeHead(413, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Payload too large' }));
         return;
       }
-      
+
       body += chunk.toString();
     });
 
     req.on('end', async () => {
+      // Hoist eventId and content_id so they are accessible in the catch block
+      let eventId = null;
+      let content_id = null;
+
       try {
         const data = JSON.parse(body);
 
         // Validate required fields
         const email = clean(data.Email);
-        const phone = clean(data.Mobile);
+        const rawPhone = clean(data.Mobile);
+        const phone = normalizePhone(rawPhone); // Strip spaces, +91, dashes etc.
         const value = parseFloat(data.Amount) || 0;
 
-        let content_id = data.content_ids;
+        content_id = data.content_ids;
         if (Array.isArray(content_id)) {
           content_id = content_id[0];
         }
@@ -132,7 +182,7 @@ const server = http.createServer((req, res) => {
         // Safely parse optional fields
         const name = clean(data.name || '');
         const dob = clean(data.dob || '');
-        
+
         const { fn, ln } = name ? splitName(name) : { fn: undefined, ln: undefined };
         const formattedDob = dob ? formatDOB(dob) : '';
 
@@ -147,7 +197,10 @@ const server = http.createServer((req, res) => {
           console.warn("Missing external_id - deduplication weakened");
         }
 
-        const eventId = data.external_id || `evt_${Date.now()}_${Math.random()}`;
+        // Append timestamp to prevent dedup conflicts when same deal is updated
+        eventId = data.external_id
+          ? `${data.external_id}_${Date.now()}`
+          : `evt_${Date.now()}_${Math.random()}`;
 
         if (matchScore < 2) {
           console.warn("Low match quality", {
@@ -156,17 +209,25 @@ const server = http.createServer((req, res) => {
           });
         }
 
+        let eventName = "Purchase";
+
+        if (data.event_name === "Pending") {
+          eventName = "InitiateCheckout";
+        } else if (data.event_name === "Closed Won") {
+          eventName = "Purchase";
+        }
+
         const event = {
           data: [
             {
-              event_name: "Purchase",
+              event_name: eventName,
               event_time: Math.floor(Date.now() / 1000),
-              action_source: "system_generated",
+              action_source: "website",
 
               event_id: eventId,
 
               user_data: {
-                em: hash(email),
+                em: hash(clean(email).toLowerCase()),
                 ph: hash(phone),
 
                 fn: fn ? hash(fn) : undefined,
@@ -184,7 +245,7 @@ const server = http.createServer((req, res) => {
                 ct: data.city ? hash(data.city.toLowerCase()) : undefined,
                 st: data.state ? hash(data.state.toLowerCase()) : undefined,
                 zp: data.zip ? hash(data.zip) : undefined,
-                country: data.country ? hash(data.country.toLowerCase()) : undefined
+                country: data.country ? hash(normalizeCountry(data.country)) : undefined
               },
 
               custom_data: {
@@ -210,11 +271,11 @@ const server = http.createServer((req, res) => {
 
       } catch (err) {
         console.error('Meta API failed', {
-          event_id: eventId || null,
-          content_id: content_id || null,
+          event_id: eventId,
+          content_id: content_id,
           error: err.message
         });
-        
+
         // Distinguish between invalid JSON and other errors
         if (err instanceof SyntaxError) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
