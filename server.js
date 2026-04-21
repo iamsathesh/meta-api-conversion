@@ -96,6 +96,12 @@ function normalizePhone(phone) {
   return digits;
 }
 
+// Normalize zip/pincode — strip spaces, dashes, non-alphanumeric
+function normalizeZip(zip) {
+  if (!zip) return '';
+  return String(zip).replace(/[^a-zA-Z0-9]/g, '').trim();
+}
+
 async function sendToMeta(payload, retries = 2) {
   try {
     const res = await fetch(META_URL, {
@@ -244,7 +250,12 @@ const server = http.createServer((req, res) => {
 
                 ct: data.city ? hash(data.city.toLowerCase()) : undefined,
                 st: data.state ? hash(data.state.toLowerCase()) : undefined,
-                zp: data.zip ? hash(data.zip) : undefined,
+                // Read pincode from all common Zoho field names
+                zp: (() => {
+                  const raw = data.zip || data.Zip_Code || data.Mailing_Zip || data.pincode || data.Pincode || '';
+                  const normalized = normalizeZip(raw);
+                  return normalized ? hash(normalized) : undefined;
+                })(),
                 country: data.country ? hash(normalizeCountry(data.country)) : undefined
               },
 
