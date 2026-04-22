@@ -203,9 +203,25 @@ const server = http.createServer((req, res) => {
           console.warn("Missing external_id - deduplication weakened");
         }
 
-        // Append timestamp to prevent dedup conflicts when same deal is updated
+        // ── Determine event name FIRST (needed for eventId) ──────────
+        let eventName = "Purchase";
+
+        if (data.event_name === "Pending") {
+          eventName = "InitiateCheckout";
+        } else if (data.event_name === "Closed Won") {
+          eventName = "Purchase";
+        }
+
+        // ── Build eventId for Meta deduplication ─────────────────────
+        // Format: "EventName_DealId" — must match the browser pixel's eventID.
+        // The browser (FreeTierPopup.jsx) fires:
+        //   fbq('track', 'InitiateCheckout', {...}, {eventID: 'InitiateCheckout_106...'})
+        //   fbq('track', 'Purchase',         {...}, {eventID: 'Purchase_106...'})
+        // This server must send the SAME event_id so Meta merges them.
+        // Using eventName as prefix ensures InitiateCheckout and Purchase
+        // for the same deal are treated as separate events (not deduped against each other).
         eventId = data.external_id
-          ? `${data.external_id}_${Date.now()}`
+          ? `${eventName}_${data.external_id}`
           : `evt_${Date.now()}_${Math.random()}`;
 
         if (matchScore < 2) {
@@ -213,14 +229,6 @@ const server = http.createServer((req, res) => {
             event_id: eventId,
             matchScore
           });
-        }
-
-        let eventName = "Purchase";
-
-        if (data.event_name === "Pending") {
-          eventName = "InitiateCheckout";
-        } else if (data.event_name === "Closed Won") {
-          eventName = "Purchase";
         }
 
         const event = {
