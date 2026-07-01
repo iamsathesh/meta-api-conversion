@@ -23,18 +23,9 @@ function validateWebhookPayload(req, res, next) {
     return res.status(400).json({ error: 'Empty payload' });
   }
 
-  // Map GoHighLevel Stage Names to Meta Standard Events
-  let rawEventName = data.EventName || '';
-  let eventName = 'Purchase'; // Default fallback
-
-  if (rawEventName.toLowerCase().includes('pending')) {
-    eventName = 'InitiateCheckout';
-  } else if (rawEventName.toLowerCase().includes('closed won') || rawEventName.toLowerCase().includes('purchase')) {
-    eventName = 'Purchase';
-  } else if (rawEventName) {
-    // If it's a direct Meta event like "Lead", "ViewContent" etc passed through
-    eventName = rawEventName;
-  }
+  // Direct mapping: The webhook explicitly defines the exact Meta EventName 
+  // (e.g. "Purchase" or "InitiateCheckout")
+  const eventName = data.EventName || 'Purchase'; // Default to Purchase if missing
   const opportunityId = data.OpportunityID;
 
   if (!opportunityId) {
