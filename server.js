@@ -15,6 +15,15 @@ app.get('/', (req, res) => {
   res.status(200).send('Meta CAPI Webhook Service is running.');
 });
 
+// DEBUG: Temporary endpoint to see raw GHL payload
+app.post('/debug', (req, res) => {
+  console.log('=== RAW GHL PAYLOAD ===');
+  console.log(JSON.stringify(req.body, null, 2));
+  console.log('=== RAW GHL KEYS ===');
+  console.log(Object.keys(req.body));
+  res.status(200).json({ received_keys: Object.keys(req.body), raw_body: req.body });
+});
+
 // Webhook endpoint to receive data from GoHighLevel
 app.post('/webhook', validation.validateWebhookPayload, async (req, res) => {
   const data = req.body;
