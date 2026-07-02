@@ -2,17 +2,20 @@ const processedEvents = new Set();
 const MAX_DEDUP_CACHE_SIZE = 10000;
 
 // Map GHL pipeline stage names to Meta event names
+// ONLY stages listed here will be sent to Meta. Everything else is SKIPPED.
 const STAGE_TO_EVENT = {
   'pending': 'InitiateCheckout',
+  'payment failed': 'InitiateCheckout',
   'registered': 'Purchase',
   'won': 'Purchase',
   'completed': 'Purchase'
 };
 
+// Returns the Meta event name, or null if the stage should be skipped
 function mapStageToEventName(stage) {
-  if (!stage) return 'Purchase';
+  if (!stage) return null;
   const normalized = String(stage).trim().toLowerCase();
-  return STAGE_TO_EVENT[normalized] || 'Purchase';
+  return STAGE_TO_EVENT[normalized] || null; // null = skip this stage
 }
 
 function isDuplicate(eventId) {
@@ -37,6 +40,14 @@ function validateWebhookPayload(req, res, next) {
   // GHL sends pipeline stage as "pipleline_stage" (their typo) or "pipeline_stage"
   const pipelineStage = data.pipleline_stage || data.pipeline_stage || '';
   const eventName = mapStageToEventName(pipelineStage);
+
+  // If the stage is not in our allowed list, skip it silently
+  if (!eventName) {
+    return res.status(200).json({ 
+      status: 'Skipped', 
+      reason: `Stage "${pipelineStage}" is not configured for Meta tracking` 
+    });
+  }
 
   // GHL sends opportunity ID as "id" and contact ID as "contact_id"
   const opportunityId = data.id || data.contact_id;
