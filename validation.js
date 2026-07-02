@@ -26,10 +26,16 @@ function validateWebhookPayload(req, res, next) {
   // Direct mapping: The webhook explicitly defines the exact Meta EventName 
   // (e.g. "Purchase" or "InitiateCheckout")
   const eventName = data.EventName || 'Purchase'; // Default to Purchase if missing
-  const opportunityId = data.OpportunityID;
+  let opportunityId = data.OpportunityID;
 
   if (!opportunityId) {
-    return res.status(422).json({ error: 'OpportunityID is required for deduplication' });
+    if (data.ContactID) {
+      const productName = data.ProductName || 'UnknownProduct';
+      // Create a unique ID using the contact and the specific product they are buying
+      opportunityId = `${data.ContactID}_${productName.replace(/[^a-zA-Z0-9]/g, '')}`;
+    } else {
+      return res.status(422).json({ error: 'OpportunityID or ContactID is required for deduplication' });
+    }
   }
 
   const eventId = `${eventName}_${opportunityId}`;

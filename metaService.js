@@ -36,8 +36,17 @@ function buildMetaPayload(data, eventId, eventName, contentId) {
   const rawPhone = hashUtils.clean(data.Phone);
   const phone = hashUtils.normalizePhone(rawPhone);
   
-  const name = hashUtils.clean(data.FullName || '');
-  const { fn, ln } = name ? hashUtils.splitName(name) : { fn: undefined, ln: undefined };
+  let fn = hashUtils.clean(data.FirstName || '');
+  let ln = hashUtils.clean(data.LastName || '');
+
+  if (!fn && !ln) {
+    const name = hashUtils.clean(data.FullName || '');
+    if (name) {
+      const split = hashUtils.splitName(name);
+      fn = split.fn;
+      ln = split.ln;
+    }
+  }
   
   const dob = hashUtils.clean(data.DateOfBirth || '');
   const formattedDob = dob ? hashUtils.formatDOB(dob) : '';
