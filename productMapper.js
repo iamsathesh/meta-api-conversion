@@ -12,7 +12,7 @@ function mapProductNameToContentId(productName) {
     return PRODUCT_MAP[productName];
   }
   // Fallback: convert string to lowercase with underscores
-  return productName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  return String(productName).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 }
 
 module.exports = {

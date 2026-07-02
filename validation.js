@@ -33,7 +33,7 @@ function validateWebhookPayload(req, res, next) {
     if (contactId) {
       const productName = data.ProductName || data.productName || data.product_name || 'UnknownProduct';
       // Create a unique ID using the contact and the specific product they are buying
-      opportunityId = `${contactId}_${productName.replace(/[^a-zA-Z0-9]/g, '')}`;
+      opportunityId = `${contactId}_${String(productName).replace(/[^a-zA-Z0-9]/g, '')}`;
     } else {
       return res.status(422).json({ 
         error: 'OpportunityID or ContactID is required for deduplication',
