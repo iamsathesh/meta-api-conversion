@@ -35,12 +35,15 @@ app.post('/webhook', validation.validateWebhookPayload, async (req, res) => {
       message: 'Received webhook',
       EventID: eventId,
       EventName: eventName,
-      OpportunityID: data.OpportunityID,
-      ContactID: data.ContactID,
-      ProductName: data.ProductName
+      ContactID: data.contact_id,
+      OpportunityID: data.id,
+      ProductName: data.opportunity_name,
+      PipelineStage: data.pipleline_stage || data.pipeline_stage,
+      Email: data.email
     });
 
-    const contentId = productMapper.mapProductNameToContentId(data.ProductName);
+    // Use opportunity_name for product mapping
+    const contentId = productMapper.mapProductNameToContentId(data.opportunity_name);
     
     // Construct the payload for Meta
     const metaPayload = metaService.buildMetaPayload(data, eventId, eventName, contentId);
@@ -55,9 +58,8 @@ app.post('/webhook', validation.validateWebhookPayload, async (req, res) => {
       message: 'Successfully sent to Meta',
       EventID: eventId,
       EventName: eventName,
-      OpportunityID: data.OpportunityID,
-      ContactID: data.ContactID,
-      PaymentID: data.PaymentID,
+      ContactID: data.contact_id,
+      OpportunityID: data.id,
       MetaResponse: metaResponse,
       HTTPStatus: 200
     });
@@ -68,8 +70,8 @@ app.post('/webhook', validation.validateWebhookPayload, async (req, res) => {
       message: 'Failed to send to Meta',
       EventID: eventId,
       EventName: eventName,
-      OpportunityID: data.OpportunityID,
-      ContactID: data.ContactID,
+      ContactID: data.contact_id,
+      OpportunityID: data.id,
       ErrorMessage: err.message,
       HTTPStatus: err.message.includes('Meta API error') ? 502 : 500
     });

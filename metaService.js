@@ -13,7 +13,6 @@ async function sendToMeta(payload, retries = 2) {
 
     if (!response.ok) {
       if (retries > 0 && response.status >= 500) {
-        // Wait 1 second before retrying
         await new Promise(resolve => setTimeout(resolve, 1000));
         return sendToMeta(payload, retries - 1);
       }
@@ -32,26 +31,33 @@ async function sendToMeta(payload, retries = 2) {
 }
 
 function buildMetaPayload(data, eventId, eventName, contentId) {
-  const email = hashUtils.clean(data.Email);
-  const rawPhone = hashUtils.clean(data.Phone);
+  // GHL uses lowercase/snake_case keys
+  const email = hashUtils.clean(data.email);
+  const rawPhone = hashUtils.clean(data.phone);
   const phone = hashUtils.normalizePhone(rawPhone);
-  
-  let fn = hashUtils.clean(data.FirstName || '');
-  let ln = hashUtils.clean(data.LastName || '');
 
-  if (!fn && !ln) {
-    const name = hashUtils.clean(data.FullName || '');
-    if (name) {
-      const split = hashUtils.splitName(name);
-      fn = split.fn;
-      ln = split.ln;
-    }
+  // GHL sends first_name and full_name (no last_name)
+  let fn = hashUtils.clean(data.first_name || '');
+  let ln = '';
+
+  // If full_name has more words than first_name, extract last name from it
+  const fullName = hashUtils.clean(data.full_name || '');
+  if (fullName && fullName !== fn) {
+    const split = hashUtils.splitName(fullName);
+    if (!fn) fn = split.fn || '';
+    ln = split.ln || '';
   }
-  
-  const dob = hashUtils.clean(data.DateOfBirth || '');
-  const formattedDob = dob ? hashUtils.formatDOB(dob) : '';
 
-  const value = parseFloat(data.AmountPaid) || 0;
+  // GHL sends lead_value as a number
+  const value = parseFloat(data.lead_value) || 0;
+
+  // GHL sends city, state, country in lowercase keys
+  const city = hashUtils.clean(data.city || '');
+  const state = hashUtils.clean(data.state || '');
+  const country = hashUtils.clean(data.country || '');
+
+  // GHL sends "First Landing Page" as the landing page URL
+  const landingPageUrl = data['First Landing Page'] || '';
 
   return {
     data: [
@@ -60,30 +66,28 @@ function buildMetaPayload(data, eventId, eventName, contentId) {
         event_time: Math.floor(Date.now() / 1000),
         action_source: "website",
         event_id: eventId,
-        event_source_url: data.LandingPageURL || undefined,
+        event_source_url: landingPageUrl || undefined,
         user_data: {
           em: email ? hashUtils.hash(email) : undefined,
           ph: phone ? hashUtils.hash(phone) : undefined,
-          fn: fn ? hashUtils.hash(fn) : undefined,
-          ln: ln ? hashUtils.hash(ln) : undefined,
-          db: formattedDob ? hashUtils.hash(formattedDob) : undefined,
-          ct: data.City ? hashUtils.hash(data.City.toLowerCase()) : undefined,
-          st: data.State ? hashUtils.hash(data.State.toLowerCase()) : undefined,
-          zp: data.ZipCode ? hashUtils.hash(hashUtils.normalizeZip(data.ZipCode)) : undefined,
-          country: data.Country ? hashUtils.hash(hashUtils.normalizeCountry(data.Country)) : undefined,
-          external_id: data.OpportunityID ? hashUtils.hash(data.OpportunityID) : undefined,
-          client_ip_address: data.ClientIP || undefined,
-          client_user_agent: data.UserAgent || undefined,
-          fbc: data.FBC || undefined,
-          fbp: data.FBP || undefined
+          fn: fn ? hashUtils.hash(fn.toLowerCase()) : undefined,
+          ln: ln ? hashUtils.hash(ln.toLowerCase()) : undefined,
+          ct: city ? hashUtils.hash(city.toLowerCase()) : undefined,
+          st: state ? hashUtils.hash(state.toLowerCase()) : undefined,
+          country: country ? hashUtils.hash(hashUtils.normalizeCountry(country)) : undefined,
+          external_id: data.contact_id ? hashUtils.hash(data.contact_id) : undefined,
+          client_ip_address: data.ip || undefined,
+          client_user_agent: data.user_agent || undefined,
+          fbc: data.fbc || data['FBC Click ID'] || undefined,
+          fbp: data.fbp || data['FBP Browser ID'] || undefined
         },
         custom_data: {
           value: value,
-          currency: "INR", // Can be parameterized later if needed
+          currency: "INR",
           content_type: "product",
           content_ids: contentId ? [contentId] : undefined,
-          content_name: data.ProductName || undefined,
-          order_id: data.PaymentID || undefined
+          content_name: data.opportunity_name || undefined,
+          order_id: data.payment_id || data.PaymentID || undefined
         }
       }
     ]

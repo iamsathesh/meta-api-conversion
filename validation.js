@@ -1,17 +1,28 @@
 const processedEvents = new Set();
 const MAX_DEDUP_CACHE_SIZE = 10000;
 
+// Map GHL pipeline stage names to Meta event names
+const STAGE_TO_EVENT = {
+  'pending': 'InitiateCheckout',
+  'registered': 'Purchase',
+  'won': 'Purchase',
+  'completed': 'Purchase'
+};
+
+function mapStageToEventName(stage) {
+  if (!stage) return 'Purchase';
+  const normalized = String(stage).trim().toLowerCase();
+  return STAGE_TO_EVENT[normalized] || 'Purchase';
+}
+
 function isDuplicate(eventId) {
   return processedEvents.has(eventId);
 }
 
 function markAsProcessed(eventId) {
   if (processedEvents.size >= MAX_DEDUP_CACHE_SIZE) {
-    // Simple eviction: clear the set or remove oldest. 
-    // For a basic implementation, we can just clear it or use an array for LRU.
-    // To keep it simple and efficient:
     const iterator = processedEvents.values();
-    processedEvents.delete(iterator.next().value); // remove the oldest inserted
+    processedEvents.delete(iterator.next().value);
   }
   processedEvents.add(eventId);
 }
@@ -23,23 +34,18 @@ function validateWebhookPayload(req, res, next) {
     return res.status(400).json({ error: 'Empty payload' });
   }
 
-  // Direct mapping: The webhook explicitly defines the exact Meta EventName 
-  // (e.g. "Purchase" or "InitiateCheckout")
-  const eventName = data.EventName || 'Purchase'; // Default to Purchase if missing
-  let opportunityId = data.OpportunityID || data.opportunityId || data.opportunity_id;
+  // GHL sends pipeline stage as "pipleline_stage" (their typo) or "pipeline_stage"
+  const pipelineStage = data.pipleline_stage || data.pipeline_stage || '';
+  const eventName = mapStageToEventName(pipelineStage);
+
+  // GHL sends opportunity ID as "id" and contact ID as "contact_id"
+  const opportunityId = data.id || data.contact_id;
 
   if (!opportunityId) {
-    const contactId = data.ContactID || data.contactId || data.contact_id || data.id;
-    if (contactId) {
-      const productName = data.ProductName || data.productName || data.product_name || 'UnknownProduct';
-      // Create a unique ID using the contact and the specific product they are buying
-      opportunityId = `${contactId}_${String(productName).replace(/[^a-zA-Z0-9]/g, '')}`;
-    } else {
-      return res.status(422).json({ 
-        error: 'OpportunityID or ContactID is required for deduplication',
-        received_keys: Object.keys(data)
-      });
-    }
+    return res.status(422).json({
+      error: 'No id or contact_id found in GHL payload',
+      received_keys: Object.keys(data)
+    });
   }
 
   const eventId = `${eventName}_${opportunityId}`;
@@ -48,7 +54,6 @@ function validateWebhookPayload(req, res, next) {
 
   // Check Deduplication
   if (isDuplicate(eventId)) {
-    // If duplicate, we return 200 OK so GHL doesn't retry, but we don't process it.
     return res.status(200).json({ status: 'Ignored', reason: 'Duplicate EventID', event_id: eventId });
   }
 
