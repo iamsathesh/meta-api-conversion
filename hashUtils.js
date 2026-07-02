@@ -9,9 +9,9 @@ function hash(value) {
 
 function clean(value) {
   if (!value) return '';
-  if (typeof value !== 'string') return value;
-  if (value.includes('${')) return ''; // Filter out unresolved variables
-  return value.trim();
+  let strValue = String(value);
+  if (strValue.includes('${')) return ''; // Filter out unresolved variables
+  return strValue.trim();
 }
 
 function splitName(name) {
@@ -56,7 +56,7 @@ const COUNTRY_MAP = {
 
 function normalizeCountry(country) {
   if (!country) return '';
-  const trimmed = country.trim().toLowerCase();
+  const trimmed = String(country).trim().toLowerCase();
   if (/^[a-z]{2}$/.test(trimmed)) return trimmed;
   if (COUNTRY_MAP[trimmed]) return COUNTRY_MAP[trimmed];
   return '';
@@ -64,7 +64,7 @@ function normalizeCountry(country) {
 
 function normalizePhone(phone) {
   if (!phone) return '';
-  let digits = phone.replace(/\D/g, '');
+  let digits = String(phone).replace(/\D/g, '');
   if (digits.length === 10) {
     digits = '91' + digits; // Assuming India default if not provided
   }
